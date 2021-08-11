@@ -1,0 +1,154 @@
+########## HERBIVORE SURVEY COMPARISON: SMALL PARROTFISH ##########
+########## 
+##########
+# This file subsets available survey data to look specifically at parrotfish 
+# species between 0-15cm in length (size bins 1-3) and compares their density 
+# estimates between SVC and transect surveys. 
+##########
+##########
+# AUTHOR: Iris M. George
+# DATE OF CREATION: 2021-06-11
+##########
+##########
+
+
+# Set-Up =======================================================================
+
+# packages
+library(plyr) 
+library(tidyverse)
+library(nlme)
+library(car)
+library(arm)
+library(MuMIn)
+library(doBy)
+library(ggplot2)
+library(here)
+
+# data
+herbivores <- read_csv(here("./dataframes/herbivore_dataframe.csv"))
+
+
+# Small Parrotfish Subsets =====================================================
+
+# The following subsets the herbivore dataframe for small-bodied parrotfish 
+# species (size bins 1-3).
+
+# subset for parrotfish
+parrotfish <- herbivores[herbivores$family == "Labridae",]
+
+# subset for small parrotfish
+small_parrotfish <- parrotfish[parrotfish$size_bin %in% c(1, 2, 3),]
+
+
+# Small Parrotfish Global Model =================================================
+
+# The following section creates a global linear mixed effects model to compare 
+# small parrotfish density differences between SVC and transect surveys in 
+# relation to species, habitat, and survey traits. It explores collinearity by 
+# examining VIF values of predictors and determines model fit using random 
+# effects plots, residual plots, qq plots, and model plots. 
+
+# full model 
+small_parrotfish_global <- lme(log_difference~habitat+octocoral+stony+relief_cm
+                              +max_length+cryptic_behaviour
+                              +average_depth+size_bin_lengths, 
+                              random = list(~1|site, ~1|species_order), 
+                              small_parrotfish) 
+# removed shape because all are fusiform
+
+# summary without behaviour
+summary(small_parrotfish_global)
+
+# VIF values 
+vif(small_parrotfish_global)
+# no collinearity 
+
+
+# Small parrotfish Dredge =======================================================
+
+# The following dredges the global linear mixed effects model in order to 
+# determine the combinations of predictors that result in the models with the 
+# highest likelihood.
+
+# dredge
+small_parrotfish_dredge <- dredge(small_parrotfish_global)
+small_parrotfish_dredge
+
+# subset for delta AIC < 4
+small_parrotfish_dredge_sub <- subset(small_parrotfish_dredge, delta < 4)
+
+# model average of top models 
+small_parrotfish_model_avg <- model.avg(small_parrotfish_dredge_sub)
+summary(small_parrotfish_model_avg)
+
+# confidence intervals of top model covariates
+confint(small_parrotfish_model_avg)
+
+# save dredge outputs 
+saveRDS(small_parrotfish_dredge, here("./outputs/small_parrotfish_dredge.rds"))
+
+
+# Covariate Plots ==============================================================
+
+# The following creates scatterplots and boxplots of all significant predictors 
+# from the mixed linear effects model. 
+
+# reef type boxplot
+ggplot(small_parrotfish, aes(x = habitat, y = log_difference, 
+                             fill = habitat)) +
+  geom_boxplot() +
+  theme_classic() + xlab("Reef Type") + 
+  ylab(bquote("Log Density Difference " (individuals/m^2))) +
+  theme(axis.title = element_text(size = 20)) +
+  theme(axis.text= element_text(size = 18)) +
+  theme(legend.text = element_text(size = 18)) +
+  theme(legend.title = element_text(size = 20)) +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             colour = "grey40")
+# insignificant
+
+# octocoral plot
+plot(small_parrotfish$log_difference ~ small_parrotfish$octocoral)
+# significantly positive
+
+# stony coral plot
+plot(small_parrotfish$log_difference ~ small_parrotfish$stony)
+# significantly positive
+
+# cryptic behaviour boxplot
+small_parrotfish$cryptic_char <- 
+  as.character(small_parrotfish$cryptic_behaviour)
+ggplot(small_parrotfish, aes(x = cryptic_char, y = log_difference, 
+                             fill = cryptic_char)) +
+  geom_boxplot() +
+  theme_classic() + xlab("Presence of Cryptic Behaviour") + 
+  ylab(bquote("Log Density Difference " (individuals/m^2))) +
+  theme(axis.title = element_text(size = 20)) +
+  theme(axis.text= element_text(size = 18)) +
+  theme(legend.text = element_text(size = 18)) +
+  theme(legend.title = element_text(size = 20)) +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             colour = "grey40")
+# significantly negative
+
+# size bin boxplot
+small_parrotfish$size_bin_char <- as.character(small_parrotfish$size_bin)
+ggplot(small_parrotfish, aes(x = size_bin_char, y = log_difference, 
+                             fill = size_bin_char)) +
+  geom_boxplot() +
+  theme_classic() + xlab("Size Bin") + 
+  ylab(bquote("Log Density Difference " (individuals/m^2))) +
+  theme(axis.title = element_text(size = 20)) +
+  theme(axis.text= element_text(size = 18)) +
+  theme(legend.text = element_text(size = 18)) +
+  theme(legend.title = element_text(size = 20)) +
+  scale_fill_brewer(palette = "Dark2") +
+  geom_hline(yintercept = 0,
+             linetype = "dashed",
+             colour = "grey40")
+# significantly positive
